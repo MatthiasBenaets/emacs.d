@@ -1,0 +1,5 @@
+#+title: .emacs.d
+
+It's about time I learn a bit of lisp and set up my own emacs config.
+
+Work in progress

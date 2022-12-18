@@ -1,0 +1,9 @@
+*~
+*.elc
+*.~undo-tree
+\#*
+/auto-save-list
+/elpa
+/eshell
+/var
+/.cask/
