@@ -9,28 +9,27 @@
 
 ;; ;; check system type
 ;; (pcase system-type
-;; 	('gnu/linux "Linux")
-;; 	('windows-nt "Windows")
-;; 	('darwin "MacOS"))
+;;      ('gnu/linux "Linux")
+;;      ('windows-nt "Windows")
+;;      ('darwin "MacOS"))
 
 ;; Less garbage collection on startup
 (setq gc-cons-threshold (* 50 1000 1000))
 
 ;; Emacs startup time
 (add-hook 'emacs-startup-hook
-	  (lambda ()
-	    (message "Emacs loaded in %s with %d garbage collections."
-		     (format "%.2f seconds"
-			     (float-time
-			      (time-subtract after-init-time before-init-time)))
-		     gcs-done)))
+          (lambda ()
+            (message "Emacs loaded in %s with %d garbage collections."
+                     (format "%.2f seconds"
+                             (float-time (time-subtract after-init-time before-init-time)))
+                     gcs-done)))
 
 ;;Initialize package sources
 (require 'package)
 
 (setq package-archives '(("melpa" . "https://melpa.org/packages/")
-			 ("org" . "https://orgmode.org/elpa/")
-			 ("elpa" . "https://elpa.gnu.org/packages/")))
+                         ("org" . "https://orgmode.org/elpa/")
+                         ("elpa" . "https://elpa.gnu.org/packages/")))
 
 (package-initialize)
 
@@ -46,7 +45,7 @@
 
 ;; Move transient/temp files outside of dir
 (setq user-emacs-directory (expand-file-name "~/.cache/emacs/")
-     url-history-file (expand-file-name "url/history" user-emacs-directory))
+      url-history-file (expand-file-name "url/history" user-emacs-directory))
 
 (use-package no-littering)
 
@@ -56,6 +55,15 @@
 (setq custom-file (locate-user-emacs-file "custom.el"))
 (load custom-file 'noerror 'nomessage)
 
+;; Startup benchmark
+(use-package esup)
+(setq esup-depth 0)
+
+;; Clean whitepaces
+(use-package whitespace
+  :ensure nil
+  :hook (before-save . whitespace-cleanup))
+
 ;; Coding system
 (set-default-coding-systems 'utf-8)
 
@@ -64,15 +72,15 @@
 (save-place-mode 1)
 
 ;; Auto revert changed files
-(setq global-auto-revert-non-file-buffers t)
 (global-auto-revert-mode 1)
+(setq global-auto-revert-non-file-buffers t)
 
 ;; Help
 (use-package helpful
-	:custom
-	(describe-function-function #'helpful-callable)
-  (describe-variable-function #'helpful-variable)
-	:bind
+  :custom
+  (add-hook describe-function-function #'helpful-callable)
+  (add-hook describe-variable-function #'helpful-variable)
+  :bind
   ([remap describe-function] . helpful-function)
   ([remap describe-symbol] . helpful-symbol)
   ([remap describe-variable] . helpful-variable)
@@ -84,14 +92,22 @@
 (global-set-key (kbd "M-SPC") 'other-window)
 
 (use-package evil
+  :hook (after-init . evil-mode)
   :init
   (setq evil-want-integration t
-				evil-want-keybinding nil
-				evil-respect-visual-line-mode t
-				evil-undo-system nil)
+        evil-want-keybinding nil
+        evil-respect-visual-line-mode t
+        evil-undo-system nil)
+  :preface
+  (defun mb/write-kill-this-buffer ()
+    (interactive)
+    (save-buffer)
+    (kill-this-buffer))
   :config
-  (evil-mode 1)
-	(define-key evil-motion-state-map (kbd "/") 'consult-line))
+  ;; (evil-mode 1)
+  (define-key evil-motion-state-map (kbd "/") 'consult-line)
+  (evil-ex-define-cmd "q" #'kill-this-buffer)
+  (evil-ex-define-cmd "wq" #'mb/write-kill-this-buffer))
 
 (use-package evil-collection
   :after evil
@@ -117,23 +133,28 @@
     :prefix "SPC"
     :global-prefix "C-SPC")
   (mb/leader-keys
-		"e"  '(:ignore t :which-key "eval")
-		"eb" 'eval-buffer
-		"er" 'eval-region
+    "e"  '(:ignore t :which-key "eval")
+    "eb" 'eval-buffer
+    "er" 'eval-region
     "t"  '(:ignore t :which-key "toggles")
     "tt" '(counsel-load-theme :which-key "load-theme")
-		"q"  'delete-other-windows
+    "q"  'delete-other-windows
     "h"  '(help-command :which-key "help")))
 
 ;; Customization
 ;; User interface customization
 (global-visual-line-mode)
 (global-hl-line-mode t)
-(set-fringe-mode 0)
+
+(use-package dashboard
+  :config
+  (dashboard-setup-startup-hook))
+
+;; (set-fringe-mode 0)
 (setq use-dialog-box nil
       visible-bell t
-			word-wrap t
-			visual-line-fringe-indicators nil)
+      word-wrap t
+      visual-line-fringe-indicators nil)
 
 ;; Scroll
 (setq mouse-wheel-scroll-amount '(3 ((shift) . 1))
@@ -141,13 +162,13 @@
       mouse-wheel-follow-mouse 't
       scroll-preserve-screen-position 'always
       scroll-margin 8
-			scroll-step 1)
+      scroll-step 1)
 
 ;; Numbering
 (column-number-mode)
 (dolist (mode '(text-mode-hook
-		prog-mode-hook
-		conf-mode-hook))
+                prog-mode-hook
+                conf-mode-hook))
   (add-hook mode (lambda () (display-line-numbers-mode 1))))
 
 ;; Overrider numbering
@@ -156,14 +177,13 @@
 
 ;; Highlight parens
 (show-paren-mode 1)
-
-;; Smart parens
-(use-package smartparens
-	:hook (prog-mode . smartparens-mode))
+(use-package elec-pair
+  :ensure nil
+  :hook (prog-mode . electric-pair-mode))
 
 ;; Delimiters visibility
 (use-package rainbow-delimiters
-	:hook (prog-mode . rainbow-delimiters-mode))
+  :hook (prog-mode . rainbow-delimiters-mode))
 
 ;; Themes
 (use-package doom-themes
@@ -173,32 +193,32 @@
 
 ;; Fonts
 (set-face-attribute 'default nil
-										:font "Source Code Pro"
-										:weight 'normal
-										:height 115)
+                    :font "Source Code Pro"
+                    :weight 'normal
+                    :height 115)
 
 (set-face-attribute 'fixed-pitch nil
-										:font "Fira Code Nerd Font"
-										:weight 'semi-light
-										:height 115)
+                    :font "Fira Code Nerd Font"
+                    :weight 'semi-light
+                    :height 115)
 
 (set-face-attribute 'variable-pitch nil
-										:font "Fira Code Nerd Font"
-										:weight 'semi-light
-										:height 115)
+                    :font "Fira Code Nerd Font"
+                    :weight 'semi-light
+                    :height 115)
 
 (set-face-attribute 'font-lock-comment-face nil
-										:font "Source Code Pro"
-										:slant 'italic
-										:weight 'normal
-										:height 110)
+                    :font "Source Code Pro"
+                    :slant 'italic
+                    :weight 'normal
+                    :height 110)
 
 ;; ;; Fonts for client
 ;; (add-to-list 'default-frame-alist '(font . "Fira Code Nerd Font-13"))
 ;; (add-hook 'minibuffer-setup-hook 'mb/minibuffer)
 ;; (defun mb/minibuffer ()
-;; 	(set (make-local-variable 'face-remapping-alist)
-;; 			 '((default :height 0.85))))
+;;      (set (make-local-variable 'face-remapping-alist)
+;;                       '((default :height 0.85))))
 
 ;; Modeline
 (use-package doom-modeline
@@ -212,38 +232,38 @@
 
 (use-package all-the-icons)
 (use-package all-the-icons-completion
-	:after (marginalia all-the-icons)
-	:hook ( marginalia-mode . all-the-icons-completion-marginalia-setup)
-	:init
-	(all-the-icons-completion-mode))
+  :after (marginalia all-the-icons)
+  :hook ( marginalia-mode . all-the-icons-completion-marginalia-setup)
+  :init
+  (all-the-icons-completion-mode))
 
 ;; Completion
 (use-package vertico
   :bind (:map vertico-map
-							("C-j" . vertico-next)
-							("C-k" . vertico-previous);)
-							("RET" . vertico-directory-enter)
-							("<backspace>" . vertico-directory-delete-char))
+              ("C-j" . vertico-next)
+              ("C-k" . vertico-previous);)
+              ("RET" . vertico-directory-enter)
+              ("<backspace>" . vertico-directory-delete-char))
   :init
-	(setq vertico-count 8
-				vertico-cycle t)
+  (setq vertico-count 8
+        vertico-cycle t)
   (vertico-mode))
 
 ;; Completion commmands
 (use-package consult
   :demand t
   :bind (("C-s" . consult-line)
-				 ("C-f" . consult-buffer-other-window)
+         ("C-f" . consult-buffer-other-window)
          ("C-M-l" . consult-imenu)
          :map minibuffer-local-map
          ("M-s" . consult-history))
   :config
   (mb/leader-keys
-		"s"  '(consult-line :which-key "search")
+    "s"  '(consult-line :which-key "search")
     "b"  '(:ignore f :which-key "buffer")
     "bb" '(consult-buffer :which-key "buffer")
     "b." '(consult-buffer-other-window :which-key "buffer-other-window")
-		"."  'find-file
+    "."  'find-file
     "f"  '(:ignore f :which-key "files")
     "ff" 'find-file
     "f." 'find-file-other-window
@@ -254,32 +274,32 @@
 
 ;; Completion history
 (use-package savehist
-	:init
-	(setq history-length 50)
-	(savehist-mode))
+  :init
+  (setq history-length 50)
+  (savehist-mode))
 
 ;; Fuzzy Search
 (use-package orderless
-	:init
-	(setq completion-styles '(orderless)
-				completion-category-defaults nil
-				completion-category-overrides '((file (styles . (partial-completion))))))
+  :init
+  (setq completion-styles '(orderless)
+        completion-category-defaults nil
+        completion-category-overrides '((file (styles . (partial-completion))))))
 
 ;; Minibuffer info
 (use-package marginalia
-	:after vertico
-	:custom
-	(marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil))
-	:init
-	(marginalia-mode))
+  :after vertico
+  :custom
+  (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil))
+  :init
+  (marginalia-mode))
 
 (setq enable-recursive-minibuffers t)
 
 ;; (use-package counsel
-;; 	:demand t
+;;      :demand t
 ;;   :bind (("M-x" . counsel-M-x)
-;; 	 ("C-x b" . counsel-ibuffer)
-;; 	 ("C-x C-f" . counsel-find-file))
+;;          ("C-x b" . counsel-ibuffer)
+;;          ("C-x C-f" . counsel-find-file))
 ;;   :config
 ;;   (setq ivy-initial-inputs-alist nil)
 ;;   (mb/leader-keys
@@ -287,16 +307,16 @@
 ;;     "f"  '(:ignore f :which-key "files")
 ;;     "ff" '(counsel-find-file :which-key "find-file")
 ;;     "f." '(find-file-other-window :which-key "find-file-other-window")
-;; 		"fr" '(counsel-recentf :which-key "recent-file")))
+;;     "fr" '(counsel-recentf :which-key "recent-file")))
 
 ;; ;; Margins
 ;; (defun mb/org-mode-visual-fill ()
-;; 	(setq visual-fill-column-width 110
-;; 				visual-fill-column-center-text t)
-;; 	(visual-fill-column-mode 1))
+;;    (setq visual-fill-column-width 110
+;;          visual-fill-column-center-text t)
+;;    (visual-fill-column-mode 1))
 ;; (use-package visual-fill-column
-;; 	:defer t
-;; 	:hook (org-mode . mb/org-mode-visual-fill))
+;;    :defer t
+;;    :hook (org-mode . mb/org-mode-visual-fill))
 
 ;; ;; Completion
 ;; (use-package ivy
@@ -316,58 +336,54 @@
 ;;          ("C-d" . ivy-reverse-i-search-kill))
 ;;   :init
 ;;   (ivy-mode 1)
-;; 	:config
+;;      :config
 ;;   (setq ivy-use-virtual-buffers t)
 ;;   (mb/leader-keys
-;; 		"s" '(swiper :which-key "search")))
+;;      "s" '(swiper :which-key "search")))
 
 ;; ;; Ivy extra info
 ;; (use-package ivy-rich
-;; 	:init (ivy-rich-mode 1)
-;; 	:after counsel)
+;;    :init (ivy-rich-mode 1)
+;;    :after counsel)
 
 ;; ;; Sort and filter list of candidates
 ;; (use-package prescient
-;; 	:after counsel
-;; 	:config
-;; 	(prescient-persist-mode 1))
+;;    :after counsel
+;;    :config
+;;    (prescient-persist-mode 1))
 
 ;; (use-package ivy-prescient
-;; 	:after prescient
-;; 	:config
-;; 	(ivy-prescient-mode 1))
+;;    :after prescient
+;;    :config
+;;    (ivy-prescient-mode 1))
 
-;; Auto saving
-(use-package super-save
-  :defer 1
-  :diminish super-save-mode
-  :config
-  (super-save-mode +1)
-  (setq super-save-auto-save-when-idle t))
+;; Auto saving (use-package super-save :defer 1 :diminish
+;; super-save-mode :config (super-save-mode +1) (setq
+;; super-save-auto-save-when-idle t))
 
-;; Editing
-(setq-default tab-width 2)
+;; Editing (setq-default tab-width 2)
+(setq-default indent-tabs-mode nil)
 (setq-default evil-shift-width tab-width)
 
 ;; Region selection
 (use-package expand-region
-	:bind (("M-[" . er/contract-region)
-				 ("M-]" . er/expand-region)))
+  :bind (("M-[" . er/contract-region)
+         ("M-]" . er/expand-region)))
 
 ;; Org Mode
 (defun mb/org-mode ()
-	(org-indent-mode)
-	;; (variable-pitch-mode 1)
-	(auto-fill-mode 0)
-	(setq evil-auto-indent nil))
+  (org-indent-mode)
+  ;; (variable-pitch-mode 1)
+  (auto-fill-mode 0)
+  (setq evil-auto-indent nil))
 
 (use-package org
-	:defer t
-	:hook (org-mode . mb/org-mode)
-	:config
-	(setq org-ellipsis " ▼"
-				org-hide-emphasis-markers nil
-				org-src-fontify-natively t
+  :defer t
+  :hook (org-mode . mb/org-mode)
+  :config
+  (setq org-ellipsis " ▼"
+        org-hide-emphasis-markers nil
+        org-src-fontify-natively t
         org-fontify-quote-and-verse-blocks t
         org-src-tab-acts-natively t
         org-edit-src-content-indentation 2
@@ -376,26 +392,27 @@
         org-startup-folded 'showeverything
         org-cycle-separator-lines 2))
 
-  (org-babel-do-load-languages
+(org-babel-do-load-languages
     'org-babel-load-languages
     '((emacs-lisp . t)
-			(shell . t)))
-	(setq org-confirm-babel-evaluate nil)
+      ;; (python . t)
+      (shell . t)))
+(setq org-confirm-babel-evaluate nil)
 
 ;; Margins
 (defun mb/org-mode-visual-fill ()
-	(setq visual-fill-column-width 110
-				visual-fill-column-center-text t)
-	(visual-fill-column-mode 1))
+  (setq visual-fill-column-width 110
+        visual-fill-column-center-text t)
+  (visual-fill-column-mode 1))
 (use-package visual-fill-column
-	:defer t
-	:hook (org-mode . mb/org-mode-visual-fill))
+  :hook (org-mode . mb/org-mode-visual-fill))
 
 ;; Bullets
 (use-package org-bullets
-	:config
-	(add-hook 'org-mode-hook
-						#'org-bullets-mode))
+  :defer t
+  :config
+  (add-hook 'org-mode-hook
+            #'org-bullets-mode))
 ;; Headers
 (custom-set-faces
   '(org-level-1 ((t (:inherit outline-1 :height 1.20))))
@@ -406,11 +423,11 @@
 
 ;; Auto TOC update
 (use-package org-make-toc
-	:hook (org-mode . org-make-toc-mode))
+  :hook (org-mode . org-make-toc-mode))
 
 ;; Temp symbol visibility
 ;; (use-package org-appear
-;; 	:hook (org-mode . org-appear-mode))
+;;      :hook (org-mode . org-appear-mode))
 
 ;; Auto-gen source blocks
 (require 'org-tempo)
@@ -420,47 +437,52 @@
 
 ;; Git
 (use-package git-gutter
-	:config
-	(global-git-gutter-mode 1))
+  :config
+  (global-git-gutter-mode 1))
 
 ;; Magit
 (use-package magit
-	:bind ("C-x g" . magit-status)
-	:commands (magit-status magit-get-current-branch)
-	:custom
-	(magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1)
+  :bind ("C-x g" . magit-status)
+  :commands (magit-status magit-get-current-branch)
+  :custom
+  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1)
   :config
-	(mb/leader-keys
-		"g"  '(:ignore t :which-key "git")
-		"gs" 'magit-status
-		"gc" 'magit-branch-or-checkout
-		"gb" 'magit-branch
-		"gp" 'magit-pull-branch
-		"gP" 'magit-push-current
-		"gf" 'magit-fetch
-		"gF" 'magit-fetch-all
-		"gr" 'magit-rebase))
+  (mb/leader-keys
+    "g"  '(:ignore t :which-key "git")
+    "gs" 'magit-status
+    "gc" 'magit-branch-or-checkout
+    "gb" 'magit-branch
+    "gp" 'magit-pull-branch
+    "gP" 'magit-push-current
+    "gf" 'magit-fetch
+    "gF" 'magit-fetch-all
+    "gr" 'magit-rebase))
 
 ;; languages
 ;; emacs-lsp.github.io/lsp-mode/page/languages
 (use-package lsp-mode
-	:commands (lsp lsp-deferred)
-	:init
-	(setq lsp-keymap-prefix "C-c l")
-	:config
-	(lsp-enable-which-key-integration t))
+  :commands (lsp lsp-deferred)
+  :init
+  (setq lsp-keymap-prefix "C-c l")
+  :config
+  (lsp-enable-which-key-integration t))
 
 (use-package company
-	:after lsp-mode
-	:hook (lsp-mode . company-mode)
-	:config
-	(setq company-minimum-prefix-length 1
-	      company-idle-delay 0))
+  :after lsp-mode
+  :hook (lsp-mode . company-mode)
+  :config
+  (setq company-minimum-prefix-length 1
+        company-idle-delay 0))
 
 (use-package nix-mode
-	:mode "\\.nix\\'"
-	:hook ((nix-mode . lsp-deferred)))
-				 ;; (nix-mode . company-mode)))
+  :mode "\\.nix\\'"
+  :hook ((nix-mode . lsp-deferred)))
+        ;; (nix-mode . company-mode)))
+
+(use-package yaml-mode
+  :mode (("\\.yaml\\'" . yaml-mode)
+         ("\\.yml\\'" . yaml-mode))
+  :hook ((yaml-mode . lsp-deferred)))
 
 ;;TODO
 ;; Org presentation
