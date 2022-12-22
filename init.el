@@ -14,15 +14,15 @@
 ;;      ('darwin "MacOS"))
 
 ;; Less garbage collection on startup
-(setq gc-cons-threshold (* 50 1000 1000))
+(setq gc-cons-threshold (* 100 1000 1000))
 
 ;; Emacs startup time
-(add-hook 'emacs-startup-hook
-          (lambda ()
-            (message "Emacs loaded in %s with %d garbage collections."
-                     (format "%.2f seconds"
-                             (float-time (time-subtract after-init-time before-init-time)))
-                     gcs-done)))
+;; (add-hook 'emacs-startup-hook
+;;           (lambda ()
+;;             (message "Emacs loaded in %s with %d garbage collections."
+;;                      (format "%.2f seconds"
+;;                              (float-time (time-subtract after-init-time before-init-time)))
+;;                      gcs-done)))
 
 ;;Initialize package sources
 (require 'package)
@@ -137,7 +137,7 @@
     "eb" 'eval-buffer
     "er" 'eval-region
     "t"  '(:ignore t :which-key "toggles")
-    "tt" '(counsel-load-theme :which-key "load-theme")
+    "tt" '(load-theme :which-key "load-theme")
     "q"  'delete-other-windows
     "h"  '(help-command :which-key "help")))
 
@@ -147,6 +147,16 @@
 (global-hl-line-mode t)
 
 (use-package dashboard
+  :init
+  (setq initial-buffer-choice (lambda () (get-buffer-create "*dashboard*"))
+        dashboard-items '((recents . 10)
+                          (bookmarks . 5))
+        ;; dashboard-startup-banner nil
+        dashboard-banner-logo-title "Welcome back Matthias"
+        dashboard-center-content t
+        dashboard-set-heading-icons t
+        dashboard-set-file-icons t
+        dashboard-set-navigator t)
   :config
   (dashboard-setup-startup-hook))
 
@@ -198,12 +208,12 @@
                     :height 115)
 
 (set-face-attribute 'fixed-pitch nil
-                    :font "Fira Code Nerd Font"
+                    :font "Source Code Pro"
                     :weight 'semi-light
                     :height 115)
 
 (set-face-attribute 'variable-pitch nil
-                    :font "Fira Code Nerd Font"
+                    :font "Source Code Pro"
                     :weight 'semi-light
                     :height 115)
 
@@ -227,7 +237,7 @@
   (doom-modeline-height 25)
   (doom-modeline-bar-width 5)
   (doom-modeline-buffer-name t)
-  (doom-modeline-buffer-file-name-style 'truncate-except-project)
+  (doom-modeline-buffer-file-name-style 'truncate-nil)
   (doom-modeline-icon t))
 
 (use-package all-the-icons)
@@ -380,6 +390,7 @@
 (use-package org
   :defer t
   :hook (org-mode . mb/org-mode)
+  :commands org-babel-do-load-languages
   :config
   (setq org-ellipsis " ▼"
         org-hide-emphasis-markers nil
@@ -392,12 +403,12 @@
         org-startup-folded 'showeverything
         org-cycle-separator-lines 2))
 
-(org-babel-do-load-languages
-    'org-babel-load-languages
-    '((emacs-lisp . t)
-      ;; (python . t)
-      (shell . t)))
-(setq org-confirm-babel-evaluate nil)
+;; (org-babel-do-load-languages
+;;     'org-babel-load-languages
+;;     '((emacs-lisp . t)
+;;       ;; (python . t)
+;;       (shell . t)))
+;; (setq org-confirm-babel-evaluate nil)
 
 ;; Margins
 (defun mb/org-mode-visual-fill ()
@@ -430,13 +441,17 @@
 ;;      :hook (org-mode . org-appear-mode))
 
 ;; Auto-gen source blocks
-(require 'org-tempo)
-(add-to-list 'org-structure-template-alist '("el" . "src emacs-lisp"))
-(add-to-list 'org-structure-template-alist '("sh" . "src sh"))
-(add-to-list 'org-structure-template-alist '("nix" . "src nix"))
+(use-package org-tempo
+    :ensure nil
+    :after (org)
+    :config
+    (add-to-list 'org-structure-template-alist '("el" . "src emacs-lisp"))
+    (add-to-list 'org-structure-template-alist '("sh" . "src sh"))
+    (add-to-list 'org-structure-template-alist '("nix" . "src nix")))
 
 ;; Git
 (use-package git-gutter
+  :defer 2
   :config
   (global-git-gutter-mode 1))
 
@@ -474,15 +489,19 @@
   (setq company-minimum-prefix-length 1
         company-idle-delay 0))
 
+(use-package lisp-mode
+  :ensure nil
+  :mode "\\.el\\'"
+  :hook ((lisp-mode . company-mode)))
+
 (use-package nix-mode
   :mode "\\.nix\\'"
   :hook ((nix-mode . lsp-deferred)))
-        ;; (nix-mode . company-mode)))
 
 (use-package yaml-mode
   :mode (("\\.yaml\\'" . yaml-mode)
          ("\\.yml\\'" . yaml-mode))
-  :hook ((yaml-mode . lsp-deferred)))
+  :hook ((yaml-mode . company-mode)))
 
 ;;TODO
 ;; Org presentation
