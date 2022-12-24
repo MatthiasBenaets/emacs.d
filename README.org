@@ -1,5 +1,733 @@
-#+title: .emacs.d
+#+TITLE: Emacs Configuration
+#+PROPERTY: header-args :elisp :tangle init.el
 
-It's about time I learn a bit of lisp and set up my own emacs config.
+* Table of Contents
+:PROPERTIES:
+:TOC:      :include all :depth 2 :force (nothing) :ignore (this) :local (nothing)
+:END:
+:CONTENTS:
+- [[#initial][Initial]]
+- [[#package-management][Package Management]]
+- [[#files][Files]]
+- [[#benchmarking][Benchmarking]]
+- [[#quality-of-life][Quality of Life]]
+- [[#keybindings][Keybindings]]
+- [[#customization][Customization]]
+- [[#minibuffer][Minibuffer]]
+- [[#org-mode][Org Mode]]
+- [[#git][Git]]
+- [[#language-server][Language server]]
+- [[#extras][Extras]]
+- [[#final][Final]]
+:END:
 
-Work in progress
+* Initial
+
+On startup, Emacs get's rid of most of the user interface this it just clutters the screen.
+Since all the UI element have been disabled at the start of the config, why keep the dialog boxes? These will be disabled as well.
+If Emacs is not running as a service, it's also possible to start the server from here using ~(server-start)~.
+Additionally the startup message is inhibited to speed.
+
+#+begin_src elisp
+  (menu-bar-mode -1)
+  (scroll-bar-mode -1)
+  (tool-bar-mode -1)
+  (tooltip-mode -1)
+  (setq inhibit-startup-message t
+        use-dialog-box nil)
+#+end_src
+
+To speed up the startup time, the garbage collection threshold is raised so it is less likely to run.
+With the example below, the garbage collector will ignore item above 100MB.
+
+#+begin_src elisp
+(setq gc-cons-threshold (* 100 1000 1000))
+#+end_src
+
+* Package Management
+
+Emacs comes with a great package manager and libraries out of the box. But it can be greatly extended using other archives such as MELPA. To be able to use these sources, they first need to be added to the package-archive list. Afterwards the package library can be initialized.
+
+#+begin_src elisp
+  (require 'package)
+
+  (setq package-archives '(("melpa" . "https://melpa.org/packages/")
+                           ("org" . "https://orgmode.org/elpa/")
+                           ("elpa" . "https://elpa.gnu.org/packages/")))
+
+  (package-initialize)
+ #+end_src
+
+When all archives are initialized, a check is done if ~package-archive-contents~ exist. If it doesn't, which most likely is on first startup, it will refresh the package list.
+
+For this config ~use-package~ is used to install and configure all the package settings. On first startup this will probably not be installed. If it's not available, it will automatically be installed.
+It then gets enabled and the variable ~use-package-always-ensure~ is set to ~t~. This means that every package configured with use-package will be automatically installed. If the package is a built-in Emacs library, it's recommended to manually overwrite this with ~:ensure nil~.
+
+#+begin_src elisp
+  (unless package-archive-contents
+          (package-refresh-contents))
+
+  (unless (package-installed-p 'use-package)
+          (package-install 'use-package))
+  (require 'use-package)
+  (setq use-package-always-ensure t)
+#+end_src
+
+* Files
+
+Emacs and additional packages will create or generate multiple different files that are either temporary or permanent. To keep the ".emacs.d" directory clutter free, let's move all these generated filed to another location in the filesystem. The package ~no-littering~ is used to make this a bit easier.
+
+#+begin_src elisp
+  (setq user-emacs-directory (expand-file-name "~/.cache/emacs/")
+        url-history-file (expand-file-name "url/history" user-emacs-directory))
+
+  (use-package no-littering)
+
+  (setq auto-save-file-name-transforms
+        `((".*" ,(no-littering-expand-var-file-name "auto-save/") t)))
+
+  (setq custom-file (locate-user-emacs-file "custom.el"))
+  (load custom-file 'noerror 'nomessage)
+#+end_src
+
+
+* Benchmarking
+
+When configuring your init.el, it's a good idea to check where optimizations can be made during loadtime. The load optimizations are often done using ~use-package~ with ~:defer~, ~:hook~ and ~:after~. Esup will start a new Emacs frame and check how long it take for each package, library and function to load.
+
+#+begin_src elisp
+  (use-package esup)
+  (setq esup-depth 0)
+#+end_src
+
+* Quality of Life
+
+Before setting up all the different packages, let's first configure a few variable that will have a great effect on the quality of life when using Emacs.
+
+First, let's set the coding system to UTF-8. This makes sure the character encoding won't become a problem on other operating systems. The ~indent-tab-mode~ is also set to ~nil~ so all tabs will become spaces. This is done so other editors won't display the indentations in other ways.
+
+#+begin_src elisp
+  (set-default-coding-systems 'utf-8)
+  (setq-default indent-tabs-mode nil)
+#+end_src
+
+A 'recent file' is created that will store all the recently opened files and the variable ~save-place-mode~ is set to "1". This means that Emacs should remember the cursors placement upon reopening of the file.
+
+#+begin_src elisp
+  (recentf-mode 1)
+  (save-place-mode 1)
+#+end_src
+
+When working on files that are stored on a server it recommended to keep the built in file browser Dired and the opened buffers up to date to limit conflicts. To solve this ~auto-revert-mode~ is enabled globally.
+
+#+begin_src elisp
+  (global-auto-revert-mode 1)
+  (setq global-auto-revert-non-file-buffers t)
+#+end_src
+
+A couple of great packages also exist for a better quality of life.
+The first one is a built-in Emacs library used to remove unneccesary whitespace. Use-package is used to configure this. Whenever a file is saved, the function ~whitespace-cleanup~ in ran.
+
+#+begin_src elisp
+  (use-package whitespace
+    :ensure nil
+    :hook (before-save . whitespace-cleanup))
+#+end_src
+
+The Helpful package is great for consulting and learning about specific functions and variables. It will extend the many ~describe-*~ functions with more information.
+To make life easier the keybinding from the original functions are replaces with the new Helpful functions. To access them use keybinding ~C-h~.
+
+#+begin_src elisp
+  (use-package helpful
+    :custom
+    (add-hook describe-function-function #'helpful-callable)
+    (add-hook describe-variable-function #'helpful-variable)
+    :bind
+    ([remap describe-function] . helpful-function)
+    ([remap describe-symbol] . helpful-symbol)
+    ([remap describe-variable] . helpful-variable)
+    ([remap describe-command] . helpful-command)
+    ([remap describe-key] . helpful-key))
+#+end_src
+
+Lastly Which-Key automatically shows all the available keybindings in the minibuffer whenever keys are pressed.
+If you know keybinding by heart this menu is just a distraction, therefore an idle delay is set for half a second.
+
+#+begin_src elisp
+  (use-package which-key
+     :init (which-key-mode)
+     :diminish which-key-mode
+     :config
+       (setq which-key-idle-delay 0.5))
+#+end_src
+
+An optional extra package that can be set up is ~super-save~. Emacs will save a backup file by itself while being idle for a while. With super-save it will actually save the file after every edit, kind of like how cloud text editors work.
+
+#+begin_src elisp :tangle no
+  (use-package super-save
+    :defer 1
+    :diminish super-save-mode
+    :config
+    (super-save-mode +1)
+    (setq super-save-auto-save-when-idle t))
+#+end_src
+
+~Expand-region~ is a great region selector packages. Using ~er/contract-region~ and ~er/exmapnd-region~ is very quick to expand the contract the selected region in specific code.
+
+#+begin_src elisp
+  (use-package expand-region
+    :bind (("M-[" . er/contract-region)
+           ("M-]" . er/expand-region)))
+#+end_src
+
+* Keybindings
+
+To set global key bindings, it's possible to use ~global-set-key~. For this config two pretty useful keybinding are set up. First of, the ~Esc~-key should immediately quit out of the minibuffer. Second, ~M-SPC~ is an alternative keybinding to quickly switch to the other window.
+
+#+begin_src elisp
+  (global-set-key (kbd "<escape>") 'keyboard-escape-quit)
+  (global-set-key (kbd "M-SPC") 'other-window)
+#+end_src
+
+The Emacs keybinding in and of itself are pretty good, but if you have any experience with Vim keybindings it hard to break the habit.
+Luckily there is a package named ~Evil~ availabe that sets up the functionality without to much hassle.
+
+The package is loaded after the intitial startup of Emacs to keep loading times down. This will automatically set ~(evil-mode 1)~. Thus it's no longer to need to set this under ~:config~ or ~:init~.
+In this config they are still used to set up personal preferences.
+
+With the normal keybindings ~:q~ and ~:wq~ completely closes Emacs. If you only want to kill the buffer the function created under ~:preface~ can be used in conjunction with the redefined commands under ~:config~.
+
+Using ~/~ as a search function will also open the ~consult-line~ inside the minibuffer. More info about this package can be found later on in this document.
+
+#+begin_src elisp
+  (use-package evil
+    :hook (after-init . evil-mode)
+    :init
+    (setq evil-want-integration t
+          evil-want-keybinding nil
+          evil-respect-visual-line-mode t
+          evil-undo-system nil)
+    :preface
+    (defun mb/write-kill-this-buffer ()
+      (interactive)
+      (save-buffer)
+      (kill-this-buffer))
+    :config
+    (define-key evil-motion-state-map (kbd "/") 'consult-line)
+    (evil-ex-define-cmd "q" #'kill-this-buffer)
+    (evil-ex-define-cmd "wq" #'mb/write-kill-this-buffer))
+  (setq-default evil-shift-width tab-width)
+#+end_src
+
+The evil package can also be extended using some other available packages on Melpa.
+The ~evil-collection~ package is a collection of Evil bindings for parts of Emacs that Evil does not properly cover. Also the ~evil-nerd-commenter~ will make it able to quickly (un)comment lines with a simple keybinding.
+
+#+begin_src elisp
+  (use-package evil-collection
+    :after evil
+    :config
+    (evil-collection-init))
+
+  (use-package evil-nerd-commenter
+    :bind ("M-/" . evilnc-comment-or-uncomment-lines))
+#+end_src
+
+As mentioned above, it possible to set custom keybindings using ~global-set-key~. This is great but is limiting for existing and new prefixes. A more convenient method is using a package called ~general~.
+
+Since ~SPC~ is a great central key and isn't often used in the general keybindings, it's great as a prefix.
+General make it very easy to create extra keybindings. With the custom function ~leader-keys~ it possible to set up different prefixes using space. In conjunction with the package ~which-key~ each keybind can be customized even further.
+
+#+begin_src elisp
+  (use-package general
+    :config
+    (general-evil-setup t)
+    (general-create-definer mb/leader-keys
+      :keymaps '(normal insert visual emacs)
+      :prefix "SPC"
+      :global-prefix "C-SPC")
+      (mb/leader-keys
+        "e"  '(:ignore t :which-key "eval")
+        "eb" 'eval-buffer
+        "er" 'eval-region
+        "t"  '(:ignore t :which-key "toggles")
+        "tt" '(load-theme :which-key "load-theme")
+        "q"  'delete-other-windows
+        "h"  '(help-command :which-key "help")))
+#+end_src
+
+* Customization
+
+Let's make Emacs a bit prittier.
+
+First of all, a couple of build in variables and functions.
+Let's make the cursor a bit more visible by making it blinking and the selected line highlighted.
+For readability, enabling ~global-visual-line-mode~ will break the line if it is too long for the visual line. This might not be optimal for coding, but it can always be disabled and enabled using a hook.
+
+#+begin_src elisp
+  (blink-cursor-mode 1)
+  (global-hl-line-mode t)
+  (global-visual-line-mode)
+#+end_src
+
+A few other tweak done are the visual bell for when the cursor is at the start and end of line.
+And since visual line mode is active, ~word-wrap~ is enabled for readability. ~visual-line-fringe-indicators~ is also disabled so arrows won't show up in de fringes to indicated line breaks.
+
+#+begin_src elisp
+  (setq visible-bell t
+        word-wrap t
+        visual-line-fringe-indicators nil)
+#+end_src
+
+Let's also quickly configure the mouse a bit more. Using the variables below mouse scroll will scroll by 3 lines unless shift is pressed, then it scroll by 1 line. Progressive speed is also disable because nobody like it. Purely for quality of life, the mouse will also follow the scroll to make quick edits much easier by keyboard.
+
+Scrolling with the keyboard can also be tweaked a bit more. By preserving the screen position and setting the ~scroll-step~ to 1, the windows won't jump to much while scrolling. For better readability the ~scroll-margin~ is set to 8 lines, so the cursor won't go all the way up/down the document.
+
+#+begin_src elisp
+  (setq mouse-wheel-scroll-amount '(3 ((shift) . 1))
+        mouse-wheel-progressive-speed nil
+        mouse-wheel-follow-mouse 't
+        scroll-preserve-screen-position 'always
+        scroll-margin 8
+        scroll-step 1)
+#+end_src
+
+For better readability and coding, showing the column and line number is essential.
+The ~display-line-number-mode~ is enabled for text, prog and conf mode but a special rule is set for org-mode. For org-mode this can be distracting, so it will be disabled.
+
+#+begin_src elisp
+  (column-number-mode)
+  (dolist (mode '(text-mode-hook
+                  prog-mode-hook
+                  conf-mode-hook))
+          (add-hook mode (lambda () (display-line-numbers-mode 1))))
+
+  (dolist (mode '(org-mode-hook))
+          (add-hook mode (lambda () (display-line-numbers-mode 0))))
+#+end_src
+
+As mentioned above, readability is pretty important.
+Since some languages use way to many parenthisis and brackets, package ~rainbow-delimiters~ will give each pair a specific color. This will make it way easier to match them.
+This is an optional package since the ~show-paren-mode~ exists. For this config this is also enabled because why not.
+
+The built-in package ~elec-pair~ will also automatically create a pair of parenthesis, brackets and quotes.
+
+#+begin_src elisp
+  (show-paren-mode 1)
+  (use-package elec-pair
+    :ensure nil
+    :hook (prog-mode . electric-pair-mode))
+
+  (use-package rainbow-delimiters
+    :hook (prog-mode . rainbow-delimiters-mode))
+#+end_src
+
+Dashboard is, as the name suggests, a dashboard. It is highly customizable.
+In this config a buffer named ~*dashboard*~ is created. This is where the dashboard will automatically load. In this config it will load the navigator, the recents opened files tab, the bookmark tab, the startup banner (which can be changed using ~dashboard-startup-banner~).
+
+To customize this further, a custom logo title is set, the dashboard is centered on the screen and the headers and files will get an icon. These icons use the package ~all-the-icons~ which will be installed further on in this config.
+
+#+begin_src elisp
+  (use-package dashboard
+    :init
+    (setq initial-buffer-choice (lambda () (get-buffer-create "*dashboard*"))
+          dashboard-items '((recents . 10)
+                            (bookmarks . 5))
+          dashboard-banner-logo-title "Welcome back Matthias"
+          dashboard-center-content t
+          dashboard-set-heading-icons t
+          dashboard-set-file-icons t
+          dashboard-set-navigator t)
+    :config
+    (dashboard-setup-startup-hook))
+#+end_src
+
+Emacs come with some great themes out of the box but with the package ~doom-themes~ many more become available. For this config the theme ~doom-one~ is used.
+Other themes can be toggled using the ~general~ keybinding ~SPC-t t~.
+
+#+begin_src elisp
+  (use-package doom-themes
+    :config
+    (load-theme 'doom-one t)
+    (doom-themes-visual-bell-config))
+#+end_src
+
+Setting a custom font can be done using ~set-face-attribute~.
+The default font will be Source Code Pro since this will also work on MacOS.
+Other types you can declare are for example ~fixed-pitch~ and ~variable-pitch~.
+For the comments the font is set to italic.
+
+#+begin_src elisp
+  (set-face-attribute 'default nil
+                      :font "Source Code Pro"
+                      :weight 'normal
+                      :height 115)
+
+  (set-face-attribute 'font-lock-comment-face nil
+                      :font "Source Code Pro"
+                      :slant 'italic
+                      :weight 'normal
+                      :height 110)
+#+end_src
+
+When running Emacs as a service and starting it up as a client, the font might not be loaded correctly. The code snippet below can alternatively be used.
+
+#+begin_src elisp :tangle no
+  (add-to-list 'default-frame-alist '(font . "Fira Code Nerd Font-13"))
+  (add-hook 'minibuffer-setup-hook 'mb/minibuffer)
+  (defun mb/minibuffer ()
+         (set (make-local-variable 'face-remapping-alist)
+                                   '((default :height 0.85))))
+#+end_src
+
+The default Emacs modeline is very helpful and display a lot of information. But this can also have a cluttering effect when many minor modes are active. The ~doom-modeline~ package is a great alternative.
+
+#+begin_src elisp
+  (use-package doom-modeline
+    :init (doom-modeline-mode 1)
+    :custom
+    (doom-modeline-height 25)
+    (doom-modeline-bar-width 5)
+    (doom-modeline-buffer-name t)
+    (doom-modeline-buffer-file-name-style 'truncate-nil)
+    (doom-modeline-icon t))
+#+end_src
+
+To have useful and pretty icons available on the dashboard, and modeline, the ~all-the-icons~ package will be installed. If the icons are not available after the install it's recommended to run ~M-x all-the-icons-install-fonts~.
+~all-the-icons-completion~ is also used with ~marginalia~ which is used for extra info in the minibuffer. This will add icon to the minibuffer as well.
+
+#+begin_src elisp
+  (use-package all-the-icons)
+  (use-package all-the-icons-completion
+    :after (marginalia all-the-icons)
+    :hook (marginalia-mode . all-the-icons-completion-marginalia-setup)
+    :init
+    (all-the-icons-completion-mode))
+#+end_src
+
+* Minibuffer
+
+The minibuffer can be configured and improved in many ways. One of these is completion.
+A great completion package is ~vertico~. Vertico will show a vertical display inside the minibuffer will show all the available completion options. This will work when using, for example, ~M-x~ and ~dired~.
+
+#+begin_src elisp
+  (use-package vertico
+    :bind (:map vertico-map
+                ("C-j" . vertico-next)
+                ("C-k" . vertico-previous);)
+                ("RET" . vertico-directory-enter)
+                ("<backspace>" . vertico-directory-delete-char))
+    :init
+    (setq vertico-count 8
+          vertico-cycle t)
+          (vertico-mode))
+#+end_src
+
+With ~consult~, completion becomes even better. Seaching inside the ~consult-buffer~ works great and with the package ~orderless~, which will be set up next, it can even be extended using a fuzzy search function.
+In this code snippet a few more custom keys are set up using ~general~ to make use of consult.
+The ~consult-line~ function can also be used as a search function inside buffers.
+
+#+begin_src elisp
+  (use-package consult
+    :demand t
+    :bind (("C-s" . consult-line)
+           ("C-f" . consult-buffer-other-window)
+           ("C-M-l" . consult-imenu)
+           :map minibuffer-local-map
+           ("M-s" . consult-history))
+    :config
+    (mb/leader-keys
+      "s"  '(consult-line :which-key "search")
+      "b"  '(:ignore f :which-key "buffer")
+      "bb" '(consult-buffer :which-key "buffer")
+      "b." '(consult-buffer-other-window :which-key "buffer-other-window")
+      "."  'find-file
+      "f"  '(:ignore f :which-key "files")
+      "ff" 'find-file
+      "f." 'find-file-other-window
+      "fr" '(consult-recent-file :which-key "recent-file")))
+#+end_src
+
+~Marginalia~ is a package to that compliments vertico. It will give a short description about functions, variables, directories and files inside the minibuffer menus.
+
+#+begin_src elisp
+  (use-package marginalia
+    :after vertico
+    :custom
+    (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil))
+    :init
+    (marginalia-mode))
+#+end_src
+
+As mentioned before, ~orderless~ makes it easier to search for stuff inside minibuffer menus such as dired and the M-x-menu. It no longer required to seach for a specific string or use wildcard characters such as "*". It is like a fuzzy search feature.
+
+#+begin_src elisp
+  (use-package orderless
+    :init
+    (setq completion-styles '(orderless)
+          completion-category-defaults nil
+          completion-category-overrides '((file (styles . (partial-completion))))))
+#+end_src
+
+~Savehist~ will save the minibuffer history. This is quite useful for menus such as M-x.
+
+#+begin_src elisp
+  (use-package savehist
+    :init
+    (setq history-length 50)
+          (savehist-mode))
+#+end_src
+
+The aforementioned package are fairly lightweight and minimal. To extend them other packages are needed. Other heavier and more feature rich alternatives are available.
+
+- counsel: alternative to consult.
+- ivy: alternative to vertico.
+  - ivy-rich: ivy module - alternative to marginalia.
+- prescient: alternative to orderless
+  - ivy-prescient: prescient module - compatibility with ivy.
+
+#+begin_src elisp :tangle no
+  (use-package counsel
+    :demand t
+    :bind (("M-x" . counsel-M-x)
+           ("C-x b" . counsel-ibuffer)
+           ("C-x C-f" . counsel-find-file))
+    :config
+    (setq ivy-initial-inputs-alist nil)
+    (mb/leader-keys
+      "b"  '(counsel-ibuffer :which-key "buffer")
+      "f"  '(:ignore f :which-key "files")
+      "ff" '(counsel-find-file :which-key "find-file")
+      "f." '(find-file-other-window :which-key "find-file-other-window")
+      "fr" '(counsel-recentf :which-key "recent-file")))
+
+  (use-package ivy
+    :diminish
+    :bind (("C-s" . swiper)
+           :map ivy-minibuffer-map
+           ;; ("TAB" . ivy-alt-done)
+           ("C-l" . ivy-alt-done)
+           ("C-j" . ivy-next-line)
+           ("C-k" . ivy-previous-line)
+           :map ivy-switch-buffer-map
+           ("C-k" . ivy-previous-line)
+           ("C-l" . ivy-done)
+           ("C-d" . ivy-switch-buffer-kill)
+           :map ivy-reverse-i-search-map
+           ("C-k" . ivy-previous-line)
+           ("C-d" . ivy-reverse-i-search-kill))
+    :init
+    (ivy-mode 1)
+    :config
+    (setq ivy-use-virtual-buffers t)
+    (mb/leader-keys
+      "s" '(swiper :which-key "search")))
+
+  (use-package ivy-rich
+    :init (ivy-rich-mode 1)
+    :after counsel)
+
+  (use-package prescient
+    :after counsel
+    :config
+    (prescient-persist-mode 1))
+
+  (use-package ivy-prescient
+    :after prescient
+    :config
+    (ivy-prescient-mode 1))
+#+end_src
+
+* Org Mode
+
+Org mode is unarguably the best Emacs major mode. It's great for note taking, documentation, to-do lists, planning and much more.
+
+A custom function in created for org-mode to start specific modes and set several variables that are mostly not part of org.
+Since org it is part of Emacs it does not need to be loaded, therefore the ~:defer t~.
+~org-babel-do-load-languages~ loads all the languages so it's possible to ~org-babel-tangle~ source blocks to files.
+
+Some useful org variables are set under ~:config~.
+
+#+begin_src elisp
+  (defun mb/org-mode ()
+    (org-indent-mode)
+    (auto-fill-mode 0)
+    (setq evil-auto-indent nil))
+
+  (use-package org
+    :defer t
+    :hook (org-mode . mb/org-mode)
+    :commands org-babel-do-load-languages
+    :config
+    (setq org-ellipsis " ▼"
+          org-hide-emphasis-markers nil
+          org-src-fontify-natively t
+          org-fontify-quote-and-verse-blocks t
+          org-src-tab-acts-natively t
+          org-edit-src-content-indentation 2
+          org-src-preserve-indentation nil
+          org-hide-block-startup nil
+          org-startup-folded 'showeverything
+          org-cycle-separator-lines 2))
+#+end_src
+
+The org bable languages are loaded above via ~:commands~. Since org is defered it will only load upon opening an org file. This is done because ~org-babel-do-load-languages~ take quite a long time to load on initial startup.
+The disadvantage is that the first opened org-file take a bit longer.
+
+If Emacs is ran as a service, initial load time are not really an issue. Thus, it's better to load it on init.
+The code listed below is an alternative to load all languages before hand.
+
+#+begin_src elisp :tangle no
+  (org-babel-do-load-languages
+      'org-babel-load-languages
+      '((emacs-lisp . t)
+        (python . t)
+        (shell . t)))
+#+end_src
+
+Since visual-line is enabled and org-mode more ment for note taking, readibility is fairly important. With the package ~visual-fill-column~ we can do kind off the same as ~(set-fringe-mode x)~ but with additional features.
+
+A hook is set up so the custom function setting all the visual-fill-column variable can be set and the mode can get enabled.
+
+#+begin_src elisp
+  (defun mb/org-mode-visual-fill ()
+    (setq visual-fill-column-width 110
+          visual-fill-column-center-text t)
+          (visual-fill-column-mode 1))
+  (use-package visual-fill-column
+    :hook (org-mode . mb/org-mode-visual-fill))
+#+end_src
+
+By default org header are set with ~*~. This is fine until you go multiple levels deep. With the package ~org-bullets~ these get replaced with better bullet icons.
+
+With the function ~(custom-set-faces)~ these header can also be given a bigger font size.
+
+#+begin_src elisp
+  (use-package org-bullets
+    :defer 1
+    :config
+    (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+
+  ;; (cu
+  (custom-set-faces
+    '(org-level-1 ((t (:inherit outline-1 :height 1.20))))
+    '(org-level-2 ((t (:inherit outline-2 :height 1.15))))
+    '(org-level-3 ((t (:inherit outline-3 :height 1.10))))
+    '(org-level-4 ((t (:inherit outline-4 :height 1.08))))
+    '(org-level-5 ((t (:inherit outline-5 :height 1.05)))))
+#+end_src
+
+Other quality of life packages for org-mode are ~org-make-toc~ and ~org-tempo~.
+With org-make-take you can quickly generate a table of content. One can be generated using ~M-x org-make-toc-insert~. It should update automatically on save.
+
+Org-tempo is a built-in function of org itself. By type ~<~ you can quickly generate source blocks which it quite handy when often using ~org-babel-tangle~. In this example a couple extra templates are added to the ~org-structure-template-alist~.
+For exmaple, typing ~<el~ will generate an emacs-list source block when pressing tab.
+
+#+begin_src elisp
+  (use-package org-make-toc
+    :hook (org-mode . org-make-toc-mode))
+
+  (use-package org-tempo
+    :ensure nil
+    :after (org)
+    :config
+    (add-to-list 'org-structure-template-alist '("el" . "src elisp"))
+    (add-to-list 'org-structure-template-alist '("sh" . "src sh"))
+    (add-to-list 'org-structure-template-alist '("nix" . "src nix")))
+#+end_src
+
+* Git
+
+Emacs has a plathora of available packages to manage git repository projects. One of these is ~git-gutter~. With git-gutter several icons will be shown in the margen of the document. It will indicate whether a uncomitted line is added, edited or removed.
+
+
+#+begin_src elisp
+  (use-package git-gutter
+    :defer 2
+    :config
+    (global-git-gutter-mode 1))
+
+#+end_src
+
+~Magit~ is a complete text-based user interface to git. Using ~magit-status~ it very easy to manage git projects.
+
+#+begin_src elisp
+  (use-package magit
+    :bind ("C-x g" . magit-status)
+    :commands (magit-status magit-get-current-branch)
+    :custom
+    (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1)
+    :config
+    (mb/leader-keys
+      "g"  '(:ignore t :which-key "git")
+      "gs" 'magit-status
+      "gc" 'magit-branch-or-checkout
+      "gb" 'magit-branch
+      "gp" 'magit-pull-branch
+      "gP" 'magit-push-current
+      "gf" 'magit-fetch
+      "gF" 'magit-fetch-all
+      "gr" 'magit-rebase))
+#+end_src
+
+* Language server
+
+~lsp-mode~ enables support for language server protocols inside Emacs. It has many great feature in and of itself but it's recommended to extend it with ~company~ a specific major mode and an actual LSP.
+A list of available servers can be found [[https://emacs-lsp.github.io/lsp-mode/page/languages][here]].
+
+#+begin_src elisp
+  (use-package lsp-mode
+    :commands (lsp lsp-deferred)
+    :init
+    (setq lsp-keymap-prefix "C-c l")
+    :config
+    (lsp-enable-which-key-integration t))
+#+end_src
+
+If no LSP is available, ~company~ is a great substitute. Company is a text completion framework that can complete pretty much anything. It has a couple back-ends available out of the box, but can also be greatly extended when a LSP server is available.
+
+Additionaly, company have a mini suggestion window that will show while typing.
+
+#+begin_src elisp
+  (use-package company
+    :after lsp-mode
+    :hook (lsp-mode . company-mode)
+    :config
+    (setq company-minimum-prefix-length 1
+          company-idle-delay 0))
+#+end_src
+
+To complete the whole programming experience, it's recommended to have a major mode available for the specific programming languages and document types.
+
+Which these packages, it's possible to specify the specific file extention of the files so Emacs knows which mode needs to be loaded. If an LSP is available, it's better to hook it to ~lsp-deferred~. Otherwise ~company-mode~ will do.
+
+#+begin_src elisp
+  (use-package lisp-mode
+    :ensure nil
+    :mode "\\.el\\'"
+    :hook ((lisp-mode . company-mode)))
+
+  (use-package nix-mode
+    :mode "\\.nix\\'"
+    :hook ((nix-mode . lsp-deferred)))
+
+  (use-package yaml-mode
+    :mode (("\\.yaml\\'" . yaml-mode)
+           ("\\.yml\\'" . yaml-mode))
+    :hook ((yaml-mode . company-mode)))
+#+end_src
+
+* TODO Extras
+
+- projectile
+- org presentations
+- org-roam
+
+* Final
+
+At the end of init.el file the garbage collector is set back to an normal value of 2MB.
+If this is kept at 100MB, as set at the start of the file, Emacs will freeze after while. This is temporary but means it is collecting garbage in the background.
+This can be frustrating, therefore setting it back to a smaller amount.
+
+#+begin_src elisp
+  (setq gc-cons-threshold (* 2 1000 1000))
+#+end_src
