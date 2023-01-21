@@ -5,7 +5,8 @@
 (setq inhibit-startup-message t
       use-dialog-box nil)
 
-(setq gc-cons-threshold (* 100 1000 1000))
+;;(setq gc-cons-threshold (* 100 1000 1000))
+(setq gc-cons-threshold most-positive-fixnum)
 
 (require 'package)
 
@@ -16,7 +17,7 @@
 (package-initialize)
 
 (unless package-archive-contents
-        (package-refresh-contents))
+  (package-refresh-contents))
 
 (unless (package-installed-p 'use-package)
         (package-install 'use-package))
@@ -62,10 +63,10 @@
   ([remap describe-key] . helpful-key))
 
 (use-package which-key
-   :init (which-key-mode)
-   :diminish which-key-mode
-   :config
-     (setq which-key-idle-delay 0.5))
+  :init (which-key-mode)
+  :diminish which-key-mode
+  :config
+  (setq which-key-idle-delay 0.5))
 
 (use-package expand-region
   :bind (("M-[" . er/contract-region)
@@ -73,6 +74,9 @@
 
 (global-set-key (kbd "<escape>") 'keyboard-escape-quit)
 (global-set-key (kbd "M-SPC") 'other-window)
+(global-set-key (kbd "C-+") 'text-scale-adjust)
+(global-set-key (kbd "C--") 'text-scale-adjust)
+(global-set-key (kbd "C-0") 'text-scale-adjust)
 
 (use-package evil
   :hook (after-init . evil-mode)
@@ -107,14 +111,14 @@
     :keymaps '(normal insert visual emacs)
     :prefix "SPC"
     :global-prefix "C-SPC")
-    (mb/leader-keys
-      "e"  '(:ignore t :which-key "eval")
-      "eb" 'eval-buffer
-      "er" 'eval-region
-      "t"  '(:ignore t :which-key "toggles")
-      "tt" '(load-theme :which-key "load-theme")
-      "q"  'delete-other-windows
-      "h"  '(help-command :which-key "help")))
+  (mb/leader-keys
+    "e"  '(:ignore t :which-key "eval")
+    "eb" 'eval-buffer
+    "er" 'eval-region
+    "t"  '(:ignore t :which-key "toggles")
+    "tt" '(load-theme :which-key "load-theme")
+    "q"  'delete-other-windows
+    "h"  '(help-command :which-key "help")))
 
 (blink-cursor-mode 1)
 (global-hl-line-mode t)
@@ -128,6 +132,7 @@
       mouse-wheel-progressive-speed nil
       mouse-wheel-follow-mouse 't
       scroll-preserve-screen-position 'always
+      scroll-conservatively 101
       scroll-margin 8
       scroll-step 1)
 
@@ -148,7 +153,14 @@
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
+(use-package highlight-indent-guides
+  :custom
+  (highlight-indent-guides-method 'character)
+  (highlight-indent-guides-responsive 'top)
+  :hook (prog-mode . highlight-indent-guides-mode))
+
 (use-package dashboard
+  :if (< (length command-line-args) 2)
   :init
   (setq initial-buffer-choice (lambda () (get-buffer-create "*dashboard*"))
         dashboard-items '((recents . 10)
@@ -256,11 +268,19 @@
         org-src-fontify-natively t
         org-fontify-quote-and-verse-blocks t
         org-src-tab-acts-natively t
-        org-edit-src-content-indentation 2
-        org-src-preserve-indentation nil
+        org-edit-src-content-indentation 0
+        org-src-preserve-indentation t
         org-hide-block-startup nil
         org-startup-folded 'showeverything
-        org-cycle-separator-lines 2))
+        ;;org-startup-with-inline-images t
+        org-cycle-separator-lines 2)
+  :custom-face
+  (org-level-1 ((t (:inherit outline-1 :height 1.20))))
+  (org-level-2 ((t (:inherit outline-2 :height 1.15))))
+  (org-level-3 ((t (:inherit outline-3 :height 1.10))))
+  (org-level-4 ((t (:inherit outline-4 :height 1.08))))
+  (org-level-5 ((t (:inherit outline-5 :height 1.05))))
+  (org-document-title ((t (:height 2.5)))))
 
 (defun mb/org-mode-visual-fill ()
   (setq visual-fill-column-width 110
@@ -269,18 +289,10 @@
 (use-package visual-fill-column
   :hook (org-mode . mb/org-mode-visual-fill))
 
-(use-package org-bullets
+(use-package org-superstar
   :defer 1
   :config
-  (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
-
-;; (cu
-(custom-set-faces
-  '(org-level-1 ((t (:inherit outline-1 :height 1.20))))
-  '(org-level-2 ((t (:inherit outline-2 :height 1.15))))
-  '(org-level-3 ((t (:inherit outline-3 :height 1.10))))
-  '(org-level-4 ((t (:inherit outline-4 :height 1.08))))
-  '(org-level-5 ((t (:inherit outline-5 :height 1.05)))))
+  (add-hook 'org-mode-hook (lambda () (org-superstar-mode 1))))
 
 (use-package org-make-toc
   :hook (org-mode . org-make-toc-mode))
@@ -292,6 +304,10 @@
   (add-to-list 'org-structure-template-alist '("el" . "src elisp"))
   (add-to-list 'org-structure-template-alist '("sh" . "src sh"))
   (add-to-list 'org-structure-template-alist '("nix" . "src nix")))
+
+(use-package evil-org
+  :after org
+  :hook (org-mode . (lambda () evil-org-mode)))
 
 (use-package git-gutter
   :defer 2
@@ -333,6 +349,13 @@
   :ensure nil
   :mode "\\.el\\'"
   :hook ((lisp-mode . company-mode)))
+
+(use-package lsp-nix
+  :ensure lsp-mode
+  :after (lsp-mode)
+  :demand t
+  :custom
+  (lsp-nix-nil-formatter ["nixpkgs-fmt"]))
 
 (use-package nix-mode
   :mode "\\.nix\\'"
